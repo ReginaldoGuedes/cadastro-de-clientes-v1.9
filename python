@@ -1,0 +1,576 @@
+import os
+import sys
+from tkinter import *
+from tkinter import END
+from tkinter import ttk, messagebox
+import sqlite3
+from urllib.parse import quote
+from reportlab.pdfgen import canvas
+from reportlab.lib import colors 
+from PIL import Image, ImageTk
+import webbrowser
+import requests
+import re
+
+class Relatorios:
+    def __init__(self):
+        self.pdf_generated_files = []
+
+    def mostrar(self):
+        try:
+            for pdf_file in self.pdf_generated_files:
+                webbrowser.open(pdf_file)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao abrir o PDF: {str(e)}")
+
+
+    def gerar_ficha(self):
+        try:
+            self.codigorel = self.entry_codigo.get()
+            self.nomerel = self.entry_nome.get()
+            self.telefonerel = self.entry_whatsapp.get()
+            self.enderecorel = self.entry_endereco.get()
+            self.numerorel = self.entry_numero.get()
+
+            endereco_completo = f"{self.enderecorel}, {self.numerorel}"
+            link_maps = f"https://www.google.com/maps/search/?api=1&query={quote(endereco_completo)}"
+
+            pdf_file_name = f'ficha_Cliente_{self.nomerel}.pdf'
+            self.pdf_generated_files.append(pdf_file_name)
+
+            self.ficha_cliente = canvas.Canvas(pdf_file_name)
+            self.ficha_cliente.setFont("Helvetica-Bold", 20)
+            self.ficha_cliente.drawString(200, 780, 'ROTA DE ENTREGA')
+            self.ficha_cliente.setFont("Helvetica-Bold", 12)
+            self.ficha_cliente.drawString(50, 680, 'Código: ' + self.codigorel)
+            self.ficha_cliente.drawString(50, 650, 'Nome/Razão: ' + self.nomerel)
+            self.ficha_cliente.drawString(50, 620, 'WhatsApp: ' + self.telefonerel)
+            self.ficha_cliente.drawString(50, 590, 'Endereço: ' + self.enderecorel)
+            self.ficha_cliente.drawString(50, 560, 'Nº: ' + self.numerorel)
+
+            self.ficha_cliente.setFont("Helvetica-Bold", 12)
+            self.ficha_cliente.setFillColor(colors.red)
+            self.ficha_cliente.drawString(50, 540, '**>>> CLIQUE AQUI INICIAR ROTA <<<**')
+            self.ficha_cliente.linkURL(link_maps, (50, 535, 250, 550), relative=1) 
+
+            self.ficha_cliente.rect(20, 430, 550, 400, fill=False, stroke=True)
+            self.ficha_cliente.showPage()
+            self.ficha_cliente.save()
+
+            self.mostrar()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao gerar o PDF: {str(e)}")  
+
+class Funcoes:
+    def limpar_campos(self):
+        try:
+            self.entry_codigo.delete(0, END)
+            self.entry_nome.delete(0, END)
+            self.entry_cpf_cnpj.delete(0, END)
+            self.entry_whatsapp.delete(0, END)
+            self.entry_email.delete(0, END)
+            self.entry_endereco.delete(0, END)
+            self.entry_numero.delete(0, END)
+            self.entry_cep.delete(0, END)
+            self.entry_bairro.delete(0, END)
+            self.entry_cidade.delete(0, END)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao limpar os campos: {str(e)}")
+    
+    def formatar_telefone(self, event=None):
+        telefone = self.entry_whatsapp.get().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        if telefone and len(telefone) > 10:
+            telefone = telefone[:11]
+            telefone_formatado = f"({telefone[:2]}) {telefone[2:7]}-{telefone[7:]}"
+            self.entry_whatsapp.delete(0, END)
+            self.entry_whatsapp.insert(0, telefone_formatado)
+    
+    def formatar_cpf_cnpj(self, event=None):
+        cpf_cnpj = self.entry_cpf_cnpj.get().replace(".", "").replace("-", "").replace("/", "").replace(",", "")
+        
+        if len(cpf_cnpj) == 11:  # CPF tem 11 dígitos
+            cpf_formatado = f"{cpf_cnpj[:3]}.{cpf_cnpj[3:6]}.{cpf_cnpj[6:9]}-{cpf_cnpj[9:11]}"
+            self.entry_cpf_cnpj.delete(0, END)
+            self.entry_cpf_cnpj.insert(0, cpf_formatado)
+        elif len(cpf_cnpj) == 14:  # CNPJ tem 14 dígitos
+            cnpj_formatado = f"{cpf_cnpj[:2]}.{cpf_cnpj[2:5]}.{cpf_cnpj[5:8]}/{cpf_cnpj[8:12]}-{cpf_cnpj[12:]}"
+            self.entry_cpf_cnpj.delete(0, END)
+            self.entry_cpf_cnpj.insert(0, cnpj_formatado)
+        else:
+            self.entry_cpf_cnpj.delete(0, END)
+            self.entry_cpf_cnpj.insert(0, cpf_cnpj)  # Deixa o valor sem formatação para verificação
+            
+    def buscar_endereco_por_cep(self, event=None):
+        cep = self.entry_cep.get()
+        if len(cep) == 8:  # Verifica se o CEP possui 8 dígitos
+            try:
+                response = requests.get(f'https://viacep.com.br/ws/{cep}/json/')
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'erro' not in data:
+                        self.entry_endereco.delete(0, END)
+                        self.entry_endereco.insert(END, data['logradouro'])
+                        self.entry_bairro.delete(0, END)
+                        self.entry_bairro.insert(END, data['bairro'])
+                        self.entry_cidade.delete(0, END)
+                        self.entry_cidade.insert(END, data['localidade'])
+                    else:
+                        messagebox.showwarning("Atenção", "CEP não encontrado.")
+                else:
+                    messagebox.showerror("Erro", "Erro ao buscar o endereço.")
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao buscar o endereço: {str(e)}")
+        else:
+            messagebox.showwarning("Atenção", "CEP deve conter 8 dígitos.")
+
+    def db_conect(self):
+        try:
+            self.conexao = sqlite3.connect('clientes_bd.bd')
+            self.cursor = self.conexao.cursor()
+            print("Conectando ao banco de dados")
+        except sqlite3.Error as e:
+            messagebox.showerror("Erro", f"Erro ao conectar ao banco de dados: {str(e)}")
+
+    
+
+    def db_desconect(self):
+        try:
+            self.conexao.close()
+            print("Desconectando ao banco de dados")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao desconectar do banco de dados: {str(e)}")
+
+    def criar_tabela(self):
+        try:
+            self.db_conect()
+            self.cursor.execute(""" 
+            CREATE TABLE IF NOT EXISTS clientes(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome VARCHAR(50) NOT NULL,
+                cpf_cnpj VARCHAR(20) NOT NULL UNIQUE,  -- Adicionado UNIQUE aqui
+                whatsapp VARCHAR(15),
+                email VARCHAR(100),
+                endereco VARCHAR(100),
+                numero VARCHAR(10),
+                cep VARCHAR(10),
+                bairro VARCHAR(50),
+                cidade VARCHAR(40)
+            );""")
+            self.conexao.commit()
+            print("Banco de dados criado")
+            self.db_desconect()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao criar tabela: {str(e)}")
+
+    def capturar_campos(self):
+        self.codigo = self.entry_codigo.get()
+        self.nome = self.entry_nome.get()
+        self.cpf_cnpj = self.entry_cpf_cnpj.get()
+        self.whatsapp = self.entry_whatsapp.get()
+        self.email = self.entry_email.get()
+        self.endereco = self.entry_endereco.get()
+        self.numero = self.entry_numero.get()
+        self.cep = self.entry_cep.get()
+        self.bairro = self.entry_bairro.get()
+        self.cidade = self.entry_cidade.get()
+
+    def validar_email(self, email):
+        regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        return re.match(regex, email) is not None
+
+    
+    def add_cliente(self):
+        self.capturar_campos()
+
+        # Validação do e-mail
+        if not self.validar_email(self.email):
+            messagebox.showwarning("Atenção", "Email inválido. Verifique e tente novamente.")
+            return
+
+        self.db_conect()
+        
+        # Verificar se o CPF/CNPJ já existe
+        self.cursor.execute("""
+            SELECT id FROM clientes WHERE cpf_cnpj = ?""",
+            (self.cpf_cnpj,))
+        resultado = self.cursor.fetchone()
+
+        if resultado:
+            codigo_existente = resultado[0]
+            messagebox.showwarning("Atenção", f"CPF/CNPJ já cadastrado. Código: {codigo_existente}.")
+        else:
+            self.cursor.execute("""
+            INSERT INTO clientes (nome, cpf_cnpj, whatsapp, email, endereco, numero, cep, bairro, cidade) 
+            VALUES(?,?,?,?,?,?,?,?,?)""", 
+            (self.nome, self.cpf_cnpj, self.whatsapp, self.email, self.endereco, self.numero, self.cep, self.bairro, self.cidade))
+            self.conexao.commit()
+            messagebox.showinfo("Sucesso", "Cliente cadastrado com sucesso!")
+            self.select_lista()
+            self.limpar_campos()
+
+        self.db_desconect()
+
+    def select_lista(self):
+        self.lista_grid.delete(*self.lista_grid.get_children())
+        self.db_conect()
+        lista = self.cursor.execute("""SELECT id, nome, cpf_cnpj, whatsapp, email, endereco, numero, cep, bairro, cidade FROM clientes ORDER BY nome ASC;""")
+        for l in lista:
+            self.lista_grid.insert("", END, values=l)
+        self.db_desconect()
+
+    def OnDubleClick(self, event):
+        self.limpar_campos()
+        selected_item = self.lista_grid.selection()
+        for item in selected_item:
+            values = self.lista_grid.item(item, 'values')
+            if values:
+                self.entry_codigo.insert(END, values[0])
+                self.entry_nome.insert(END, values[1])
+                self.entry_cpf_cnpj.insert(END, values[2])
+                self.entry_whatsapp.insert(END, values[3])
+                self.entry_email.insert(END, values[4])
+                self.entry_endereco.insert(END, values[5])
+                self.entry_numero.insert(END, values[6])
+                self.entry_cep.insert(END, values[7])
+                self.entry_bairro.insert(END, values[8])
+                self.entry_cidade.insert(END, values[9])
+
+    def deleta_cliente(self):
+        self.capturar_campos()
+        self.db_conect()
+        self.cursor.execute("""DELETE FROM clientes WHERE id = ?""", (self.codigo,))
+        self.conexao.commit()
+        self.db_desconect()
+        self.limpar_campos()
+        self.select_lista()
+
+    def alterar_cliente(self):
+        self.capturar_campos()
+        self.db_conect()
+        self.cursor.execute("""
+        UPDATE clientes SET nome = ?, cpf_cnpj = ?, whatsapp = ?, email = ?, 
+        endereco = ?, numero = ?, cep = ?, bairro = ?, cidade = ?
+        WHERE id = ?;""", (self.nome, self.cpf_cnpj, self.whatsapp, self.email, self.endereco, self.numero, self.cep, self.bairro, self.cidade, self.codigo))
+        self.conexao.commit()
+        self.db_desconect()
+        self.limpar_campos()
+        self.select_lista()
+
+    def Buscar_Cliente(self):
+        self.db_conect()
+
+        termos_busca = self.entry_codigo.get().strip()  # Captura o código para busca
+        if not termos_busca:
+            termos_busca = self.entry_nome.get().strip()  # Se o código não foi informado, tenta buscar pelo nome
+        if not termos_busca:
+            termos_busca = self.entry_cpf_cnpj.get().strip()  # Se nada foi informado, tenta buscar pelo CPF/CNPJ
+        
+        query = """
+        SELECT id, nome, cpf_cnpj, whatsapp, email, endereco, numero, cep, bairro, cidade 
+        FROM clientes 
+        WHERE id = ? OR nome LIKE ? OR cpf_cnpj LIKE ?
+        """
+        
+        if termos_busca.isdigit():  # Verifique se a busca é um número, presumindo que seja um ID
+            self.cursor.execute(query, (termos_busca, None, None))  # Procura pelo ID exatamente
+        else:
+            self.cursor.execute(query, (None, '%' + termos_busca + '%', '%' + termos_busca + '%'))  # Busca por nome e CPF/CNPJ
+
+        Resultado_busca = self.cursor.fetchall()
+
+        if Resultado_busca:
+            cliente = Resultado_busca[0]
+            self.entry_codigo.delete(0, END)
+            self.entry_codigo.insert(END, cliente[0])
+            self.entry_nome.delete(0, END)
+            self.entry_nome.insert(END, cliente[1])
+            self.entry_cpf_cnpj.delete(0, END)
+            self.entry_cpf_cnpj.insert(END, cliente[2])
+            self.entry_whatsapp.delete(0, END)
+            self.entry_whatsapp.insert(END, cliente[3])
+            self.entry_email.delete(0, END)
+            self.entry_email.insert(END, cliente[4])
+            self.entry_endereco.delete(0, END)
+            self.entry_endereco.insert(END, cliente[5])
+            self.entry_numero.delete(0, END)
+            self.entry_numero.insert(END, cliente[6])
+            self.entry_cep.delete(0, END)
+            self.entry_cep.insert(END, cliente[7])
+            self.entry_bairro.delete(0, END)
+            self.entry_bairro.insert(END, cliente[8])
+            self.entry_cidade.delete(0, END)
+            self.entry_cidade.insert(END, cliente[9])
+        else:
+            messagebox.showwarning("Atenção", "Cliente não encontrado.")
+        
+        self.db_desconect()
+
+class Aplication(Funcoes, Relatorios):
+    def __init__(self):
+        super().__init__()
+        
+        try:
+            if getattr(sys, 'frozen', False):
+                # PyInstaller criou o executável, então obtenha o caminho do executável
+                base_path = sys._MEIPASS
+            else:
+                # Em modo de desenvolvimento, use o caminho atual do arquivo
+                base_path = os.path.dirname(__file__)
+
+            self.icon_path = os.path.join(base_path, 'cadastro.ico')
+            self.logo_path = os.path.join(base_path, 'logo.png')
+
+            self.root = Tk()
+            self.root.iconbitmap(self.icon_path)
+
+            self.tela()
+            self.frames_tela()
+            self.grid_cliente()
+            self.widgets_frame1()
+            self.Menus()
+            self.criar_tabela()  
+            self.select_lista()   
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)  
+            self.root.mainloop()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro durante a inicialização: {str(e)}")
+            self.root.quit()
+
+    # Função para fechar a aplicação e remover PDFs
+    def on_closing(self):
+        try:
+            self.remove_pdfs()  # Tenta remover todos os PDFs gerados
+            self.root.destroy()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao fechar o aplicativo: {str(e)}")
+    
+    def remove_pdfs(self):
+        try:
+            for pdf_file in self.pdf_generated_files:
+                if os.path.exists(pdf_file):
+                    os.remove(pdf_file)
+            self.pdf_generated_files.clear()  # Limpa a lista de PDFs removidos
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao remover os arquivos PDF: {str(e)}")
+
+    def tela(self):
+        self.root.title("Cadastro de Clientes ZOOPI Gráfica & Personalizados v1.9")# MUDAR TEXTO DO CABEÇALHO
+        self.root.configure(background='#ffffff')
+        self.root.geometry("680x750")  # Define o tamanho inicial da janela
+        self.root.resizable(True, True)
+        self.root.maxsize(width=850, height=700)
+        self.root.minsize(width=400, height=300)
+
+        # Permite que a janela exiba corretamente seu tamanho após a configuração inicial
+        self.root.update_idletasks()  
+
+        # Obtém a largura e altura da janela atual
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+
+        # Calcula a posição X e Y para centralizar a janela
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+
+        # Define a nova geometria da janela com o cálculo centralizado
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+
+    def frames_tela(self):
+        self.frame1 = Frame(self.root, bd=4, bg="#fff", highlightbackground="#ab20a4", highlightthickness=3)
+        self.frame1.place(relx=0.02, rely=0.02, relwidth=0.96, relheight=0.70)
+
+        self.frame2 = Frame(self.root, bd=4, bg="#fff", highlightbackground="#b471f8", highlightthickness=3)
+        self.frame2.place(relx=0.02, rely=0.72, relwidth=0.96, relheight=0.28)
+
+        # Adicionar o logotipo no frame1
+        self.add_logo()
+
+    def add_logo(self):
+        # Carregar a imagem do logotipo
+        self.logo_image = Image.open(self.logo_path)  # Usa Pillow para abrir a imagem
+        self.logo_image = self.logo_image.resize((150, 70))  # Redimensiona a imagem
+        self.logo_image = ImageTk.PhotoImage(self.logo_image)  # Converte para um formato utilizável no Tkinter
+
+        # Exibir a imagem dentro do frame1
+        self.logo_label = Label(self.frame1, image=self.logo_image, bg="#fff")  # Usar self.frame1 como pai
+        self.logo_label.place(relx=0.5, rely=0.89, anchor="center")  # Ajuste o rely conforme necessário
+
+    def widgets_frame1(self):
+        self.bt_limpar = Button(self.frame1, text="Limpar", bg="#0001FC", fg="white", font=('verdana', 8, 'bold'), command=self.limpar_campos)
+        self.bt_limpar.place(relx=0.02, rely=0.01, relwidth=0.1, relheight=0.1)
+
+        self.bt_buscar = Button(self.frame1, text="Buscar", bg="#D65303", fg="white", font=('verdana', 8, 'bold'), command=self.Buscar_Cliente)
+        self.bt_buscar.place(relx=0.12, rely=0.01, relwidth=0.1, relheight=0.1)
+
+        self.bt_emitir_nf = Button(self.frame1, text="Emitir NF", bg="#0001FC", fg="white", font=('verdana', 8, 'bold'), command=self.emitir_nf)
+        self.bt_emitir_nf.place(relx=0.22, rely=0.01, relwidth=0.1, relheight=0.1)
+
+        self.bt_novo = Button(self.frame1, text="Salvar", bg="#D65303", fg="white", font=('verdana', 8, 'bold'), command=self.add_cliente)
+        self.bt_novo.place(relx=0.32, rely=0.01, relwidth=0.1, relheight=0.1)
+
+        self.bt_alterar = Button(self.frame1, text="Alterar", bg="#0001FC", fg="white", font=('verdana', 8, 'bold'), command=self.alterar_cliente)
+        self.bt_alterar.place(relx=0.42, rely=0.01, relwidth=0.1, relheight=0.1)
+
+        self.bt_apagar = Button(self.frame1, text="Apagar", bg="#D65303", fg="white", font=('verdana', 8, 'bold'), command=self.deleta_cliente)
+        self.bt_apagar.place(relx=0.52, rely=0.01, relwidth=0.1, relheight=0.1)
+
+        labels = [
+            ("Persquisar por Código, Nome, CPF/CNPJ", 0.05, 0.15),
+            ("Nome/Razão", 0.05, 0.25),
+            ("CPF/CNPJ", 0.05, 0.35),
+            ("WhatsApp", 0.5, 0.25),
+            ("Email", 0.5, 0.35),
+            ("Endereço", 0.05, 0.45),
+            ("Nº", 0.5, 0.45),
+            ("CEP", 0.5, 0.55),
+            ("Bairro", 0.05, 0.55),
+            ("Cidade", 0.05, 0.65)
+        ]
+
+        # Criando labels e entries
+        self.entry_codigo = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10, 'bold'))
+        self.entry_codigo.place(relx=0.05, rely=0.2, relwidth=0.85)
+
+        self.entry_nome = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10))
+        self.entry_nome.place(relx=0.05, rely=0.3, relwidth=0.4)
+
+        self.entry_cpf_cnpj = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10))
+        self.entry_cpf_cnpj.place(relx=0.05, rely=0.4, relwidth=0.4)
+        self.entry_cpf_cnpj.bind('<KeyRelease>', self.formatar_cpf_cnpj)  # Associa a função para formatação do CPF/CNPJ
+
+        self.entry_whatsapp = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10))
+        self.entry_whatsapp.place(relx=0.5, rely=0.3, relwidth=0.4)
+        self.entry_whatsapp.bind('<KeyRelease>', self.formatar_telefone)  # Associa a função para formatação do telefone
+
+        self.entry_email = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10))
+        self.entry_email.place(relx=0.5, rely=0.4, relwidth=0.4)
+
+        self.entry_endereco = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10))
+        self.entry_endereco.place(relx=0.05, rely=0.5, relwidth=0.4)
+
+        self.entry_numero = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10))
+        self.entry_numero.place(relx=0.5, rely=0.5, relwidth=0.15)
+
+        self.entry_cep = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10))
+        self.entry_cep.place(relx=0.5, rely=0.6, relwidth=0.3)
+        self.entry_cep.bind('<Return>', self.buscar_endereco_por_cep)  # Adiciona o evento para pressionar Enter
+
+        self.entry_bairro = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10))
+        self.entry_bairro.place(relx=0.05, rely=0.6, relwidth=0.4)
+
+        self.entry_cidade = Entry(self.frame1, bg="white", fg="#141414", font=('verdana', 10))
+        self.entry_cidade.place(relx=0.05, rely=0.7, relwidth=0.4)
+
+        for label, relx, rely in labels:
+            lb = Label(self.frame1, text=label, bg="white", fg="#141414", font=('verdana', 10, 'bold'))
+            lb.place(relx=relx, rely=rely)
+    
+
+
+    def grid_cliente(self):
+        self.lista_grid = ttk.Treeview(self.frame2, height=10,
+                                    columns=('col1', 'col2', 'col3', 'col4', 'col5', 'col6', 'col7', 'col8', 'col9'))
+        self.lista_grid.heading("#0", text='')
+        self.lista_grid.heading("#1", text='CÓD.')
+        self.lista_grid.heading("#2", text='NOME/RAZÃO')
+        self.lista_grid.heading("#3", text='CPF/CNPJ')
+        self.lista_grid.heading("#4", text='WHATSAPP')
+        self.lista_grid.heading("#5", text='EMAIL')
+        self.lista_grid.heading("#6", text='ENDEREÇO')
+        self.lista_grid.heading("#7", text='N°')
+        self.lista_grid.heading("#8", text='CEP')
+        self.lista_grid.heading("#9", text='CIDADE')
+
+        self.lista_grid.column("#0", width=1)
+        self.lista_grid.column("#1", width=40)
+        self.lista_grid.column("#2", width=200)
+        self.lista_grid.column("#3", width=100)
+        self.lista_grid.column("#4", width=125)
+        self.lista_grid.column("#5", width=125)
+        self.lista_grid.column("#6", width=125)
+        self.lista_grid.column("#7", width=50)
+        self.lista_grid.column("#8", width=60)
+        self.lista_grid.column("#9", width=100)
+        
+        self.lista_grid.place(relx=0.005, rely=0.1, relwidth=0.95, relheight=0.85)
+        self.scrol_lista = Scrollbar(self.frame2, orient='vertical')
+        self.lista_grid.configure(yscroll=self.scrol_lista.set)
+        self.scrol_lista.place(relx=0.96, rely=0.1, relwidth=0.04, relheight=0.85)
+        self.lista_grid.bind("<Double-1>", self.OnDubleClick)
+
+    def Menus(self):
+        Menubar = Menu(self.root)
+        self.root.config(menu=Menubar)
+        filemenu = Menu(Menubar,bg="#fff")
+        filemenu2 = Menu(Menubar, bg="#fff")
+
+        Menubar.add_cascade(label="Opções", menu=filemenu)
+        Menubar.add_cascade(label="Funções", menu=filemenu2)
+
+        filemenu.add_command(label="Sair", command=self.on_closing)
+        filemenu2.add_command(label="Limpar campos", command=self.limpar_campos)
+        filemenu2.add_command(label="Criar Rota de Entrega", command=self.gerar_ficha)
+        filemenu2.add_command(label="Donate", command=self.abrir_configuracoes)
+
+    def abrir_configuracoes(self):
+        # Criar nova janela para configurações
+        config_window = Toplevel(self.root)
+        config_window.title("Donate")
+        config_window.geometry("800x240")
+        config_window.configure(background='#ffffff')
+        # Impedir que a janela seja redimensionada
+        config_window.resizable(False, False)  # False para largura e altura
+        # Remover ícone da janela (e borda)
+        config_window.overrideredirect(True)
+
+        # Adicionar informações sobre contato
+        info_label = Label(config_window, text="Para alterar o link de Emissão de NF,\n"
+                                                "Inserir o nome da empresa no topo,\n"
+                                                "Colocar Sua Logo e alterar a Cor do sistema\n"
+                                                "entre em contato e fale com Reginaldo.",
+                           bg="#ffffff", fg="#333", font=("Arial", 12), justify="center")
+        info_label.pack(pady=10)
+
+        # Botão WhatsApp
+        btn_whatsapp = Button(config_window, text="Contatar via WhatsApp", 
+                              command=lambda: webbrowser.open("https://wa.me/5511995274171"),
+                              bg="#25D366", fg="white", font=("Arial", 12))
+        btn_whatsapp.pack(pady=10)
+
+        # Informação sobre doação
+        donation_label = Label(config_window, text="Considere fazer uma doação no PIX:",
+                               bg="#ffffff", fg="#333", font=("Arial", 12))
+        donation_label.pack(pady=10)
+
+        # Frame para o código PIX
+        pix_frame = Frame(config_window, bg="#ffffff")
+        pix_frame.pack(pady=10)
+
+        # Entry para o código PIX
+        pix_code = "https://pix.bcb.gov.br/Doacao?key=00020126360014br.gov.bcb.pix0114+55119952741715204000053039865802BR5925Reginaldo%20Guedes%20de%20Souza6008Brasilia62090505t37nl63045D07"
+        self.pix_entry = Entry(pix_frame, bg="white", width=55, font=("Arial", 12))
+        self.pix_entry.insert(0, pix_code)
+        # Não definimos o Entry como readonly para que o usuário possa selecionar e copiar
+        self.pix_entry.pack(side=LEFT, padx=5)
+
+        # Instrução para o usuário
+        select_label = Label(pix_frame, text="Selecione e copie o código:", bg="#f0f0f0", fg="#333", font=("Arial", 10))
+        select_label.pack(side=LEFT, padx=5)
+
+        # Centralizar a janela
+        #self.centrar_janela(config_window)
+
+    def centrar_janela(self, window):
+        window.update_idletasks()  
+        width = window.winfo_width()
+        height = window.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        window.geometry(f'{width}x{height}+{x}+{y}')
+
+    def emitir_nf(self):
+        webbrowser.open('https://www.nfse.gov.br/EmissorNacional/Login?ReturnUrl=%2fEmissorNacional%2fPerfil%2fConfiguracao')
+
+
+# Iniciar a aplicação
+Aplication()
