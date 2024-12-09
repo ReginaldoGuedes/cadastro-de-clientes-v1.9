@@ -16,3 +16,4 @@ from PIL import Image, ImageTk
 import webbrowser
 import requests
 import re
+Coloque icone e logo.png
