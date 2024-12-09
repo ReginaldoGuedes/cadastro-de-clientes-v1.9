@@ -16,4 +16,12 @@ from PIL import Image, ImageTk
 import webbrowser
 import requests
 import re
-Coloque icone e logo.png
+
+    
+Coloque icone e logo.png  
+
+    Crie o executável
+
+    pyinstaller --onefile --windowed --icon=cadastro.ico --add-data "cadastro.ico;." --add-data "logo.png;." nome-da-aplicacao.py
+
+
