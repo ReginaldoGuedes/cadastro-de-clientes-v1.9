@@ -3,19 +3,19 @@
 
 importações e pips
 
-import os
-import sys
-from tkinter import *
-from tkinter import END
-from tkinter import ttk, messagebox
-import sqlite3
-from urllib.parse import quote
-from reportlab.pdfgen import canvas
-from reportlab.lib import colors 
-from PIL import Image, ImageTk
-import webbrowser
-import requests
-import re
+    import os
+    import sys
+    from tkinter import *
+    from tkinter import END
+    from tkinter import ttk, messagebox
+    import sqlite3
+    from urllib.parse import quote
+    from reportlab.pdfgen import canvas
+    from reportlab.lib import colors 
+    from PIL import Image, ImageTk
+    import webbrowser
+    import requests
+    import re
 
     
 Coloque icone e logo.png  
